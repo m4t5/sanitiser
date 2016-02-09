@@ -1,0 +1,11 @@
+Better way of scraping pages
+
+To get index page urs, title, tease
+
+from livescrape import ScrapedPage, CssMulti, Css, CssLink
+
+class NewspaperIndexPage(ScrapedPage):
+    scrape_url = 'http://www.courier.co.uk/news'
+    stories = CssMulti('.media__body', title = Css('a'), trail = Css(
+'.standfirst'), url = CssLink('a', NewspaperIndexPage, multiple=False) )
+

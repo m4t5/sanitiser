@@ -1,0 +1,10 @@
+{% extends "layout.html" %}
+{% block body %}
+  <ul class=entries>
+  {% for story in stories %}
+    <li><h2><a href="{{ story.url }}">{{story.heading}}</a></h2>{{ story.storytext|safe }}
+  {% else %}
+    <li><em>Nothing to see here.</em>
+  {% endfor %}
+  </ul>
+{% endblock %}
