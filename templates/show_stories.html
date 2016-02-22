@@ -1,8 +1,9 @@
 {% extends "layout.html" %}
 {% block body %}
+  <p>{{message}}</p>
   <ul class=entries>
   {% for story in stories %}
-    <li><h2><a href="{{ story.url }}">{{story.heading}}</a></h2>{{ story.storytext|safe }}
+    <li><h2><a href="./s{{ story['url']}}">{{story['title']}}</a></h2>{{story['trail'] }}
   {% else %}
     <li><em>Nothing to see here.</em>
   {% endfor %}
