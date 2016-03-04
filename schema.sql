@@ -1,7 +1,7 @@
 drop table if exists story_index;
 create table story_index(
-  index_id integer primary key autoincrement,
   timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+  id integer primary key autoincrement,
   url text not null,
   title text,
   trail text
@@ -9,8 +9,9 @@ create table story_index(
 
 drop table if exists stories;
 create table stories(
-  story_id integer primary key autoincrement,
   timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+  id integer primary key autoincrement,
   url text not null,
-  story_text text not null
+  title text,
+  story text not null
 );
