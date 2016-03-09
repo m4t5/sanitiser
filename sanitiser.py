@@ -14,12 +14,8 @@
     10/2/16 Added livescrape
     20/2/16 Updates index page db records
     22/2/16 Problem getting cached from db
+    9/3/16  Fairly working now. Livescrape update has browser-like user agent.
     
-    Todo:
-        sort user agent string - currently python requests, should be firefox
-        get read of story index from database working
-        get articles from index
-
 """
 
 from flask import Flask, request, session, url_for, redirect, \
@@ -30,11 +26,11 @@ import time
 
 
 #domainName = 'http://www.courier.co.uk'
-#domainName = 'http://leicestermercury.co.uk'
-#newsUrl = '/news'
+domainName = 'http://leicestermercury.co.uk'
+newsUrl = '/news'
 
-domainName = 'http://95.85.37.86'
-newsUrl = '/news.html'
+#domainName = 'http://95.85.37.86'
+#newsUrl = '/news.html'
 
 lettersUrl = '/letters'
 
@@ -59,7 +55,7 @@ storyMaxAge = 10	# max age in mins of index page before it gets checked again
 
 
 DATABASE = 'newspapers.db'
-DEBUG = True
+DEBUG = False
 
 # create our little application :)
 app = Flask(__name__)
@@ -153,7 +149,7 @@ def saveStory(url, title, story_text):
     # save story and url
     story = ''
     for line in story_text:
-        story += line
+        story += '<p>' + line + '</p>'
     
     db.execute("""insert into stories(url, title, story)
         values (?, ?, ?);""", 
@@ -193,19 +189,20 @@ def getStory(url):
     if we don't have the requested story
         get the story
         save it
-    serve story from the db
+        serve story from the db
     '''
+    message = ''   
     url = '/' + url
-    # this currently returns a 2 story list. I want story.title and story.text
+
     story = query_db('''select story_index.title, stories.story
         from story_index, stories
         where story_index.url = (?)
         and story_index.url = stories.url;
         ''', (url,), one=True)
     if not story:
-        message = 'Fresh story.'
         # get it
         print "No story in db, fetching"
+        message = 'Live story'
         story = newspaperStoryPage(scrape_url=domainName + url)
         # save it
         #print "fetched story. story.title = ", story.title, " story.text = ", story.story
@@ -215,9 +212,10 @@ def getStory(url):
         where story_index.url = (?)
         and story_index.url = stories.url;
         ''', (url,), one=True)
-    # story exists in the db
-    print "Story found in db"
-    message = "From db."
+    else:
+        # story exists in the db
+        print "Story found in db"
+        message = "From db"
     return render_template('show_story.html', story = story, message = message, url = domainName + url)
         
 
