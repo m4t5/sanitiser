@@ -15,7 +15,11 @@
     20/2/16 Updates index page db records
     22/2/16 Problem getting cached from db
     9/3/16  Fairly working now. Livescrape update has browser-like user agent.
-    
+
+    TODO :  pictures (unravel irritating gallery function?)
+            comments
+            generalise. Make it work with any cmpatible news site
+            index pages, only works w front page atm  
 """
 
 from flask import Flask, request, session, url_for, redirect, \
@@ -55,10 +59,10 @@ storyMaxAge = 10	# max age in mins of index page before it gets checked again
 
 
 DATABASE = 'newspapers.db'
-DEBUG = False
+DEBUG = True
 
 # create our little application :)
-app = Flask(__name__)
+app = Flask(__name__, static_url_path = '/static')
 app.config.from_object(__name__)
 app.config.from_envvar('SANITISER_SETTINGS', silent=True)
 
@@ -170,10 +174,11 @@ def indexpage(page = 0):
     # print "newestDbTime = %s, timeNow = %s, difference = %s mins" % (newestDbTime,timeNow, (timeNow-newestDbTime)/60)
     if (newestDbTime == 0) or (timeNow - newestDbTime > (storyMaxAge * 60)): # stories are old
     # or db is new
-        message = 'fresh stories from %s' % (domainName + newsUrl)
+        url = newsUrl + '?page=%s' % (page)
+        message = 'fresh stories from %s' % (domainName + url)
         stories = newspaperIndexPage().stories
         saveIndex(stories)
-    else:	# serve stories from the db
+    else:	# serve stories from the db   
         message = 'Cached stories from %s' % (domainName + newsUrl)
         stories = query_db('''select url, title, trail 
             from story_index 
@@ -181,6 +186,10 @@ def indexpage(page = 0):
             order by timestamp asc''' % (-storyMaxAge) )
                 
     return render_template('show_stories.html', stories = stories, message = message)
+
+@app.route('/about')
+def aboutPage():
+    return render_template('about.html')
 
 @app.route('/s/<path:url>')	# get page by original url
 def getStory(url):
@@ -222,3 +231,4 @@ def getStory(url):
 if __name__ == '__main__':
     # init_db()
     app.run(host='0.0.0.0')
+
