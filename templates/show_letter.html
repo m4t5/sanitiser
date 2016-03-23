@@ -1,0 +1,8 @@
+{% extends "layout.html" %}
+{% block body %}
+  <p>{{message}}</p>
+  <p class=entries></p>
+  <h2><a href="{{url}}">{{letter['title']}}</a></h2>
+  <p>{{letter.letter|safe}}
+  </p>
+{% endblock %}

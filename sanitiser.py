@@ -28,20 +28,24 @@ from livescrape import ScrapedPage, CssMulti, Css, CssLink
 from sqlite3 import dbapi2 as sqlite3
 import time
 
+DATABASE = 'newspapers.db'
+DEBUG = False
 
 #domainName = 'http://www.courier.co.uk'
 domainName = 'http://leicestermercury.co.uk'
+#domainName = 'http://www.bristolpost.co.uk'
 newsUrl = '/news'
 
-#domainName = 'http://95.85.37.86'
+5~5~5~#domainName = 'http://95.85.37.86'
 #newsUrl = '/news.html'
+userAgent = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1'}
 
 lettersUrl = '/letters'
 
-newsPattern = {
+newsIndexPattern = {
     'block' : '.media__body',
     'blocktitle' : 'a',
-    'title' : 'a',
+    #'title' : 'a',
     'url' : 'a',
     'trail' : '.standfirst' }	# allow config changes / use on other sites
 
@@ -51,15 +55,20 @@ newsStoryPattern = {
     'comments' : '.comment-detail p'
     }
 
+lettersIndexPattern = {'block' : '.channel-list-item.media.cf',
+    'blocktitle' : 'a',
+    'url' : 'a', 
+    'title' : '.media__body h3',
+    'trail' : '.standfirst' }	# allow config changes / use on other sites
 
-lettersPattern =  {'url' : '', 
-    'title' : '',
-    'trail' : '' }	# allow config changes / use on other sites
+letterPattern = {
+    'title' : 'header h1,heading heading--xl',
+    'letter' : '#main-article p',
+    'comments' : '.comment-detail p'
+    }
+
 storyMaxAge = 10	# max age in mins of index page before it gets checked again
 
-
-DATABASE = 'newspapers.db'
-DEBUG = True
 
 # create our little application :)
 app = Flask(__name__, static_url_path = '/static')
@@ -74,19 +83,32 @@ class story(object):
 
 class newspaperIndexPage(ScrapedPage):
     scrape_url = domainName + newsUrl
-    scrape_headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1'}
-    stories = CssMulti(newsPattern['block'], 
-        title = Css(newsPattern['blocktitle']), 
-        trail = Css(newsPattern['trail']),
-        url = Css(newsPattern['url'],  attribute='href'),
+    scrape_headers = userAgent
+    stories = CssMulti(newsIndexPattern['block'], 
+        title = Css(newsIndexPattern['blocktitle']), 
+        trail = Css(newsIndexPattern['trail']),
+        url = Css(newsIndexPattern['url'],  attribute='href'),
     )
 
 class newspaperStoryPage(ScrapedPage):
-    scrape_headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1'}
+    scrape_headers = userAgent
     title = Css(newsStoryPattern['title']) 
-    story = Css(newsStoryPattern['story'], multiple=True )
+    story = Css(newsStoryPattern['story'], multiple = True )
     comments = Css(newsStoryPattern['comments'])
     
+class lettersIndexPage(ScrapedPage):
+    scrape_url = domainName + lettersUrl
+    scrape_headers = userAgent
+    letters = CssMulti(lettersIndexPattern['block'], 
+        title = Css(lettersIndexPattern['blocktitle']), 
+        trail = Css(lettersIndexPattern['trail']),
+        url = Css(lettersIndexPattern['url'],  attribute='href'),)
+
+class newspaperLetterPage(ScrapedPage):
+    scrape_headers = userAgent
+    title = Css(letterPattern['title'])
+    letter = Css(letterPattern['letter'], multiple = True)
+    comments = Css(letterPattern['comments'])
 
 def get_db():
     """Opens a new database connection if there is none yet for the
@@ -120,54 +142,79 @@ def query_db(query, args=(), one=False):
     rv = cur.fetchall()
     return (rv[0] if rv else None) if one else rv
 
-def getNewestDb():
+def getNewestDb(type):
     # returns unix time of newest record
     db = get_db()
-    ret = query_db('''select strftime('%s',timestamp) from story_index 
+    ret = ''
+    if type == 'news': 
+        ret = query_db('''select strftime('%s',timestamp) from story_index 
         order by timestamp desc limit 1;''', one=True)
+    elif type == 'letters':
+        ret = query_db('''select strftime('%s',timestamp) from letter_index 
+               order by timestamp desc limit 1;''', one=True)
+    else:
+        print " type not found, 0"
+        return 0
     if not ret:
-        return 0;
+        print " returning 0"
+        return 0
     return ret[0]
 
-def saveIndex(stories):
+def saveIndex(stories, table):
     # save the index page
     db = get_db()
+    selectQuery = 'select url from ' + table + ' where '
+    deleteQuery = 'delete from ' + table + ' where '
+    insertQuery = 'insert into ' + table
     for story in stories:
         # if story already exists, delete it and refresh
-        c = query_db("select url from story_index where url=(?)", (story['url'],))
-        #print story['url']
+        c = query_db(selectQuery + 'url=(?)', (story['url'],))
+        print "saveIndex - saving ", story['url']
         if c:
-            db.execute("delete from story_index where url=(?)", (story['url'],))
-        db.execute('''insert into story_index (url, title, trail) 
-              values (?, ?, ?);''', 
+            db.execute(deleteQuery + " url=(?)", (story['url'],))
+        db.execute(insertQuery + ' (url, title, trail) values (?, ?, ?);', 
               (story['url'], story['title'], story['trail']))
         db.commit()
 
-def saveStory(url, title, story_text):
+def saveItem(url, title, story_text, itemType):
+    # print "saveItem title: ", title, " story_text: ", story_text
+    # check if item already in the db
     db = get_db()
-    c = query_db('select id from stories where url=(?);', (url,))
+    if itemType == 'story':
+        c = query_db('select id from stories where url=(?);', (url,))
+    elif itemType == 'letter':
+        c = query_db('select id from letters where url=(?);', (url,))       
+    else:
+        print "unknown item type: %s", itemType
+        return None
+    
     if c:
         # check if story already in db. Should be redundant code
-        print "Story already in db. Url = ", url
+        print "%s already in db. Url = %s" % (itemType, url)
         return
     # save story and url
     story = ''
+
     for line in story_text:
         story += '<p>' + line + '</p>'
-    
-    db.execute("""insert into stories(url, title, story)
-        values (?, ?, ?);""", 
-        (url, title, story) 
-    )
+    if itemType == 'story':
+        db.execute("""insert into stories(url, title, story) 
+        values (?, ?, ?);""", (url, title, story) )
+    elif itemType == 'letter':
+        db.execute("""insert into letters(url, title, letter) 
+        values (?, ?, ?);""", (url, title, story) )
+    else:
+        print "itemType unknown"
+        return None
+        
     db.commit()
-                                
+
 @app.route('/')
 @app.route('/<int:page>')
-def indexpage(page = 0):
+def newsIndex(page = 0):
     # page will be used to get page n from source site
-
     # get age of newest record
-    newestDbTime = int(getNewestDb())
+    newestDbTime = int(getNewestDb('news'))
     # get current time
     timeNow = int(time.time())
     # compare
@@ -177,19 +224,19 @@ def indexpage(page = 0):
         url = newsUrl + '?page=%s' % (page)
         message = 'fresh stories from %s' % (domainName + url)
         stories = newspaperIndexPage().stories
-        saveIndex(stories)
+        saveIndex(stories, 'story_index')
     else:	# serve stories from the db   
         message = 'Cached stories from %s' % (domainName + newsUrl)
         stories = query_db('''select url, title, trail 
             from story_index 
             where timestamp >= datetime('now', '%s minutes')
             order by timestamp asc''' % (-storyMaxAge) )
-                
-    return render_template('show_stories.html', stories = stories, message = message)
+    return render_template('storiesIndex.html', stories = stories, message = message)
 
 @app.route('/about')
 def aboutPage():
     return render_template('about.html')
+
 
 @app.route('/s/<path:url>')	# get page by original url
 def getStory(url):
@@ -210,12 +257,13 @@ def getStory(url):
         ''', (url,), one=True)
     if not story:
         # get it
-        print "No story in db, fetching"
+        print "No story in db, fetching from ", domainName + url
         message = 'Live story'
         story = newspaperStoryPage(scrape_url=domainName + url)
+        #print "getStory story=", story.story
         # save it
         #print "fetched story. story.title = ", story.title, " story.text = ", story.story
-        saveStory(url, story.title, story.story)
+        saveItem(url, story.title, story.story, 'story')
         story = query_db('''select story_index.title, stories.story
         from story_index, stories
         where story_index.url = (?)
@@ -226,7 +274,66 @@ def getStory(url):
         print "Story found in db"
         message = "From db"
     return render_template('show_story.html', story = story, message = message, url = domainName + url)
+
+@app.route('/l/<path:url>')	# get page by original url
+def getLetter(url):
+    '''
+    Check the cache. 
+    if we don't have the requested letter[5~
+        get the letter
+        save it
+        serve letter from the db
+    '''
+    message = ''   
+    url = '/' + url
+
+    letter = query_db('''select letter_index.title, letters.letter
+        from letter_index, letters
+        where letter_index.url = (?)
+        and letter_index.url = letters.url;
+        ''', (url,), one=True)
+    if not letter:
+        # get it
+        print "No letter in db, fetching"
+        message = 'Live letter'
+        letter = newspaperLetterPage(scrape_url=domainName + url)
+        # save it
+        #print "fetched letter. letter.title = ", letter.title, " letter.text = ", letter.letter
+        saveItem(url, letter.title, letter.letter, 'letter')
+        letter = query_db('''select letter_index.title, letters.letter
+        from letter_index, letters
+        where letter_index.url = (?)
+        and letter_index.url = letters.url;
+        ''', (url,), one=True)
+    else:
+        # letter exists in the db
+        print "Letter found in db"
+        message = "From db"
+    return render_template('show_letter.html', letter = letter, message = message, url = domainName + url)
         
+@app.route('/letters')
+def lettersIndex(page = 0):
+    # get age of newest record
+    newestDbTime = int(getNewestDb('letters'))
+    # get current time
+    timeNow = int(time.time())
+    # compare
+    print "newestDbTime = %s, timeNow = %s, difference = %s mins" % (newestDbTime,timeNow, (timeNow-newestDbTime)/60)
+    if (newestDbTime == 0) or (timeNow - newestDbTime > (storyMaxAge * 60)): 
+		# stories are old
+	    # or db is new
+        url = lettersUrl + '?page=%s' % (page)
+        message = 'fresh letters from %s' % (domainName + lettersUrl)
+        letters = lettersIndexPage(scraped_page = domainName+lettersUrl).letters
+        saveIndex(letters, 'letter_index')
+    else:       # serve letters from the db
+        message = 'Cached letters from %s' % (domainName + lettersUrl)
+        letters = query_db('''select url, title, trail
+            from letter_index
+            where timestamp >= datetime('now', '%s minutes')
+            order by timestamp asc''' % (-storyMaxAge) )
+    return render_template('lettersIndex.html', letters = letters, message = message)
+
 
 if __name__ == '__main__':
     # init_db()

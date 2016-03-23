@@ -1,0 +1,12 @@
+{% extends "layout.html" %}
+{% block body %}
+  <p>{{message}}</p>
+  <ul class=entries>
+  {% for letter in letters %}
+    <li><h2><a href="./l{{letter['url']}}">{{letter['title']}}</a></h2>
+    {{letter['trail']}}
+  {% else %}
+    <li><em>Nothing to see here.</em>
+  {% endfor %}
+  </ul>
+{% endblock %}
