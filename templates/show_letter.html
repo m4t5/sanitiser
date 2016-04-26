@@ -3,6 +3,8 @@
   <p>{{message}}</p>
   <p class=entries></p>
   <h2><a href="{{url}}">{{letter['title']}}</a></h2>
-  <p>{{letter.letter|safe}}
+  <p>{{letter.letter | safe}}
   </p>
+  <h3>Comments (don't read!)</h3>
+  <p>{{letter.comments | safe}}</p>
 {% endblock %}

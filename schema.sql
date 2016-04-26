@@ -13,7 +13,8 @@ create table stories(
   id integer primary key autoincrement,
   url text not null,
   title text,
-  story text not null
+  story text not null,
+  comments text
 );
 
 drop table if exists letter_index;
@@ -31,5 +32,6 @@ create table letters(
   id integer primary key autoincrement,
   url text not null,
   title text,
-  letter text not null
+  letter text not null,
+  comments text
 );
