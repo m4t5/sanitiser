@@ -30,8 +30,8 @@ from datetime import datetime
 import time
 
 DATABASE = 'newspapers.db'
-#DEBUG = False
-DEBUG = True
+DEBUG = False
+#DEBUG = True
 
 #domainName = 'http://www.courier.co.uk'
 domainName = 'http://leicestermercury.co.uk'
@@ -112,6 +112,7 @@ class newspaperLetterPage(ScrapedPage):
     title = Css(letterPattern['title'])
     letter = Css(letterPattern['letter'], multiple = True)
     comments = Css(letterPattern['comments'], multiple = True)
+    timestamp = ''
 
 def get_db():
     """Opens a new database connection if there is none yet for the
@@ -210,12 +211,13 @@ def saveItem(url, title, story_text, story_comments, itemType):
         db.execute("""insert into stories(url, title, story, comments) 
         values (?, ?, ?, ?);""", (url, title, story, story_comments) )
     elif itemType == 'letter':
-        story_comments = story_comments[0]
-        db.execute("""insert into letters(url, title, letter, comments) 
-        values (?, ?, ?, ?);""", (url, title, story, story_comments) )
-    else:
-        print "itemType unknown"
-        return None
+        if (story_comments):
+            story_comments = story_comments[0]
+            db.execute("""insert into letters(url, title, letter, comments) 
+            values (?, ?, ?, ?);""", (url, title, story, story_comments) )
+        else:
+            print "itemType unknown"
+            return None
         
     db.commit()
 
@@ -233,7 +235,6 @@ def newsIndex(page = 0):
     # stories are old
     # or db is new
         url = newsUrl + '?page=%s' % (page)
-        message = 'fresh stories from %s' % (domainName + url)
         message = 'Fresh stories from %s updated %s' % (
             domainName + url, datetime.fromtimestamp(newestDbTime))
         stories = newspaperIndexPage().stories
@@ -275,7 +276,6 @@ def getStory(url):
         print story
         # story exists in the db
         print "Story found in db"
-        # date not working yet
         message = "From db %s" % (story[3])
     else:
         # get it
@@ -307,7 +307,7 @@ def getLetter(url):
     comments = ''  
     url = '/' + url
 
-    letter = query_db('''select letter_index.title, letters.letter, letters.comments
+    letter = query_db('''select letter_index.title, letters.letter, letters.comments, letters.timestamp
         from letter_index, letters
         where letter_index.url = (?)
         and letter_index.url = letters.url;
@@ -328,7 +328,7 @@ def getLetter(url):
     else:
         # letter exists in the db
         print "Letter found in db"
-        message = "From db"
+        message = "From db %s" % (letter[3])
     return render_template('show_letter.html', letter = letter, message = message, comments = comments, url = domainName + url)
         
 @app.route('/letters')
@@ -340,7 +340,7 @@ def lettersIndex(page = 0):
     # compare
     print "newestDbTime = %s, timeNow = %s, difference = %s mins" % (newestDbTime,timeNow, (timeNow-newestDbTime)/60)
     if (newestDbTime == 0) or (timeNow - newestDbTime > (storyMaxAge * 60)): 
-		# stories are old
+            # stories are old
 	    # or db is new
         url = lettersUrl + '?page=%s' % (page)
         message = 'fresh letters from %s' % (domainName + lettersUrl)
@@ -348,6 +348,9 @@ def lettersIndex(page = 0):
         saveIndex(letters, 'letter_index')
     else:       # serve letters from the db
         message = 'Cached letters from %s' % (domainName + lettersUrl)
+        message = 'Cached letters from %s updated %s' % (
+            domainName + newsUrl, datetime.fromtimestamp(newestDbTime))
+        
         letters = query_db('''select url, title, trail
             from letter_index
             where timestamp >= datetime('now', '%s minutes')
